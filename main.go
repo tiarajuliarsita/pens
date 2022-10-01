@@ -14,7 +14,7 @@ import (
 
 type pen struct {
 	Name  string `json:"name"`
-	Price int `json:"price"`
+	Price int    `json:"price"`
 }
 
 type response struct {
@@ -54,10 +54,10 @@ func remove(slice []pen, s int) []pen {
 func main() {
 	db, err := sql.Open("postgres", "postgres://postgres:root@localhost/pens?sslmode=disable")
 
-	if err !=nil{
+	if err != nil {
 		panic(err.Error())
 	}
-	if err=db.Ping();err !=nil{
+	if err = db.Ping(); err != nil {
 		panic(err.Error())
 	}
 
@@ -107,7 +107,7 @@ func main() {
 				sendresponse(http.StatusInternalServerError, "internal server error", nil, w)
 				return
 			}
-			_, err = db.Exec("insert into pens(name,price) values($1,$2)",pen.Name, pen.Price)
+			_, err = db.Exec("insert into pens(name,price) values($1,$2)", pen.Name, pen.Price)
 			if err != nil {
 				sendresponse(http.StatusInternalServerError, "internal server error, get pens", nil, w)
 				return
@@ -124,19 +124,14 @@ func main() {
 				sendresponse(http.StatusBadRequest, "bad request, data id params is null", nil, w)
 				return
 			}
+
 			//cek id ada atau tidak
 			idInt, err := strconv.Atoi(id)
 			if err != nil {
 				sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
 				return
 			}
-			// found:= idInt<=len(pens)
-			// if!found {
-			// 	sendresponse(http.StatusInternalServerError,"internal error", nil, w)
-			// 	return
-			// }
 
-			idInt -= 1
 			dataByte, err := io.ReadAll(r.Body)
 			if err != nil {
 				sendresponse(http.StatusBadRequest, "bad request", nil, w)
@@ -148,8 +143,11 @@ func main() {
 				sendresponse(http.StatusInternalServerError, "internal server error", nil, w)
 			}
 
-			// pens[idInt].Name = pen.Name
-			// pens[idInt].Price = pen.Price
+			_, err = db.Exec("UPDATE pens SET name=$1, Price=$2 WHERE id=$3", pen.Name, pen.Price, idInt)
+			if err != nil {
+				sendresponse(http.StatusInternalServerError, "internal server error, get pens", nil, w)
+				return
+			}
 
 			sendresponse(http.StatusCreated, "success update", nil, w)
 			return
@@ -174,8 +172,13 @@ func main() {
 			// 	return
 			// }
 
-			idInt -= 1
+			_, err = db.Exec("DELETE FROM pens WHERE id=$1", idInt)
+			if err != nil {
+				sendresponse(http.StatusInternalServerError, "internal server error, get pens", nil, w)
+				return
+			}
 			// pens = remove(pens, idInt)
+
 			sendresponse(http.StatusCreated, "success delete", nil, w)
 			return
 		}
