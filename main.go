@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	// "strconv"
 
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
@@ -26,6 +26,9 @@ type response struct {
 }
 
 //var pens []pen
+func getpen(w http.ResponseWriter, r *http.Request) {
+
+}
 
 func sendresponse(code int, message string, data interface{}, w http.ResponseWriter) {
 	resp := response{
@@ -53,6 +56,8 @@ func remove(slice []Pen, s int) []Pen {
 	return append(slice[:1], slice[s+1:]...)
 }
 
+var db *sql.DB
+
 func main() {
 	db, err := sql.Open("postgres", "postgres://postgres:root@localhost/pens?sslmode=disable")
 
@@ -67,170 +72,171 @@ func main() {
 		fmt.Println("err", err)
 		panic(err.Error())
 	}
-	fmt.Println("her")
+
+	fmt.Println(db == nil)
 
 	defer db.Close()
-
-	http.HandleFunc("/api/v1/pens", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			fmt.Println(db == nil)
-			rows, err := db.Query("select id, name, price from pens")
-			if err != nil {
-				sendresponse(http.StatusBadRequest, "internal server eror", nil, w)
-			}
-			var pens []Pen
-			fmt.Println(rows == nil)
-			for rows.Next() {
-				var pen Pen
-
-				err = rows.Scan(
-					&pen.ID,
-					&pen.Name,
-					&pen.Price,
-				)
-				if err != nil {
-					sendresponse(http.StatusInternalServerError, "internal server", nil, w)
-				}
-				pens = append(pens, pen)
-			}
-			fmt.Println("here")
-			sendresponse(http.StatusOK, "succes", pens, w)
-			return
+	r := mux.NewRouter()
+	r.HandleFunc("/api/v1/pens", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println(123, db == nil)
+		rows, err := db.Query("select id, name, price from pens")
+		if err != nil {
+			sendresponse(http.StatusBadRequest, "internal server eror", nil, w)
 		}
-		if r.Method == http.MethodPost {
-			dataByte, err := io.ReadAll(r.Body)
-			if err != nil {
-				sendresponse(http.StatusBadRequest, "bad request", nil, w)
-				return
-			}
-			defer r.Body.Close()
+		var pens []Pen
+		fmt.Println(rows == nil)
+		for rows.Next() {
 			var pen Pen
-			err = json.Unmarshal(dataByte, &pen)
-			if err != nil {
-				sendresponse(http.StatusInternalServerError, "internal server error", nil, w)
-				return
-			}
-			_, err = db.Exec("insert into pens(name,price) values($1,$2)", pen.Name, pen.Price)
-			if err != nil {
-				sendresponse(http.StatusInternalServerError, "internal server error, get pens", nil, w)
-				return
-			}
 
-			sendresponse(http.StatusCreated, "success", nil, w)
+			err = rows.Scan(
+				&pen.ID,
+				&pen.Name,
+				&pen.Price,
+			)
+			if err != nil {
+				sendresponse(http.StatusInternalServerError, "internal server", nil, w)
+			}
+			pens = append(pens, pen)
+		}
+
+		sendresponse(http.StatusOK, "succes", pens, w)
+		return
+
+	}).Methods(http.MethodGet)
+
+	r.HandleFunc("/api/v1/pens/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := mux.Vars(r)["id"]
+
+		if id == "" {
+			sendresponse(http.StatusBadRequest, "bad request, data id params is null", nil, w)
 			return
 		}
 
-		if r.Method == http.MethodPut {
-			//get query param
-			id := r.URL.Query().Get("id")
+		rows, err := db.Query("select id, name,price from pens where id = $1", id)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
+			return
+		}
 
-			if id == "" {
-				sendresponse(http.StatusBadRequest, "bad request, data id params is null", nil, w)
-				return
-			}
+		var pen Pen
+		if rows.Next() {
+			err = rows.Scan(
+				&pen.ID,
+				&pen.Name,
+				&pen.Price,
+			)
 
-			rows, err := db.Query("select id, name,price from pens where id = $1", id)
 			if err != nil {
 				sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
 				return
 			}
+		}
 
-			var pen Pen
-			if rows.Next() {
-				err = rows.Scan(
-					&pen.ID,
-					&pen.Name,
-					&pen.Price,
-				)
-
-				if err != nil {
-					sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
-					return
-				}
-			}
-
-			if pen.ID == 0 {
-				if err != nil {
-					sendresponse(http.StatusNotFound, "data not found", nil, w)
-					return
-				}
-			}
-
-			dataByte, err := io.ReadAll(r.Body)
+		if pen.ID == 0 {
 			if err != nil {
-				sendresponse(http.StatusBadRequest, "bad request", nil, w)
+				sendresponse(http.StatusNotFound, "data not found", nil, w)
 				return
 			}
-			defer r.Body.Close()
-			var newpen Pen
-			err = json.Unmarshal(dataByte, &newpen)
-			if err != nil {
-				sendresponse(http.StatusInternalServerError, "internal server error", nil, w)
-				return
-			}
+		}
 
-			pen.Name = newpen.Name
-			pen.Price = newpen.Price
-
-			_, err = db.Exec("UPDATE pens SET name=$2, Price=$3 WHERE id=$1", pen.ID, pen.Name, pen.Price)
-			if err != nil {
-				sendresponse(http.StatusInternalServerError, "internal server error, update pens", err.Error(), w)
-				return
-			}
-
-			sendresponse(http.StatusCreated, "success update", nil, w)
+		dataByte, err := io.ReadAll(r.Body)
+		if err != nil {
+			sendresponse(http.StatusBadRequest, "bad request", nil, w)
+			return
+		}
+		defer r.Body.Close()
+		var newpen Pen
+		err = json.Unmarshal(dataByte, &newpen)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error", nil, w)
 			return
 		}
 
-		if r.Method == http.MethodDelete {
-			id := r.URL.Query().Get("id")
+		pen.Name = newpen.Name
+		pen.Price = newpen.Price
 
-			if id == "" {
-				sendresponse(http.StatusBadRequest, "bad request, data id params is null", nil, w)
-				return
-			}
+		_, err = db.Exec("UPDATE pens SET name=$2, Price=$3 WHERE id=$1", pen.ID, pen.Name, pen.Price)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error, update pens", err.Error(), w)
+			return
+		}
 
-			rows, err := db.Query("select id, name,price from pens where id = $1", id)
+		sendresponse(http.StatusCreated, "success update", nil, w)
+		return
+
+	}).Methods(http.MethodPut)
+
+	r.HandleFunc("/api/v1/pens", func(w http.ResponseWriter, r *http.Request) {
+
+		dataByte, err := io.ReadAll(r.Body)
+		if err != nil {
+			sendresponse(http.StatusBadRequest, "bad request", nil, w)
+			return
+		}
+		defer r.Body.Close()
+		var pen Pen
+		err = json.Unmarshal(dataByte, &pen)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error", nil, w)
+			return
+		}
+		_, err = db.Exec("insert into pens(name,price) values($1,$2)", pen.Name, pen.Price)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error, get pens", nil, w)
+			return
+		}
+
+		sendresponse(http.StatusCreated, "success", nil, w)
+		return
+
+	}).Methods(http.MethodPost)
+
+	r.HandleFunc("/api/v1/pens/{id}", func(w http.ResponseWriter, r *http.Request) {
+		
+		//id := r.URL.Query().Get("id")
+		id := mux.Vars(r)["id"]
+		if id == "" {
+			sendresponse(http.StatusBadRequest, "bad request, data id params is null", nil, w)
+			return
+		}
+
+		rows, err := db.Query("select id, name,price from pens where id = $1", id)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
+			return
+		}
+
+		var pen Pen
+		if rows.Next() {
+			err = rows.Scan(
+				&pen.ID,
+				&pen.Name,
+				&pen.Price,
+			)
+
 			if err != nil {
 				sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
 				return
 			}
-
-			var pen Pen
-			if rows.Next() {
-				err = rows.Scan(
-					&pen.ID,
-					&pen.Name,
-					&pen.Price,
-				)
-
-				if err != nil {
-					sendresponse(http.StatusInternalServerError, "internal server error, fail convert string to int", nil, w)
-					return
-				}
-			}
-
-			if pen.ID == 0 {
-				if err != nil {
-					sendresponse(http.StatusNotFound, "data not found", nil, w)
-					return
-				}
-			}
-
-			_, err = db.Exec("DELETE FROM pens  WHERE id=$1", pen.ID)
-			if err != nil {
-				sendresponse(http.StatusInternalServerError, "internal server error,delete pens return err", nil, w)
-				return
-			}
-			sendresponse(http.StatusCreated, "success delete", nil, w)
-			return
 		}
 
-	})
+		if pen.ID == 0 {
+			if err != nil {
+				sendresponse(http.StatusNotFound, "data not found", nil, w)
+				return
+			}
+		}
+
+		_, err = db.Exec("DELETE FROM pens  WHERE id=$1", pen.ID)
+		if err != nil {
+			sendresponse(http.StatusInternalServerError, "internal server error,delete pens return err", nil, w)
+			return
+		}
+		sendresponse(http.StatusCreated, "success delete", nil, w)
+		return
+	}).Methods(http.MethodDelete)
 
 	port := "8000"
 	fmt.Println("server run on port", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal("err", err)
-	}
+	http.ListenAndServe(":"+port, r)
 }
