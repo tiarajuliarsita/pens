@@ -1,8 +1,6 @@
 package service
 
 import (
-	"errors"
-
 	"github.com/tiarajuliarsita/pens/models"
 	"github.com/tiarajuliarsita/pens/repository"
 )
@@ -21,21 +19,20 @@ func NewService(repo *repository.Repository) *Service {
 func (svc *Service) Create(pen models.Pen) error {
 	err := svc.repository.CreatePens(pen)
 	if err != nil {
-		return err
+		return models.NewInternalServerError(err.Error())
 	}
 	return nil
 }
 
 //update
 func (svc *Service) Update(newPen models.Pen) error {
-
 	pen, err := svc.repository.GetPen(newPen.ID)
 	if err != nil {
-		return err
+		return models.NewInternalServerError(err.Error())
 	}
-
-	if pen.ID == 0 {
-		return errors.New("data not found")
+	err = pen.Exist()
+	if err != nil {
+		return err
 
 	}
 	pen.Name = newPen.Name
@@ -43,7 +40,7 @@ func (svc *Service) Update(newPen models.Pen) error {
 
 	err = svc.repository.UpdatePens(pen)
 	if err != nil {
-		return err
+		return models.NewInternalServerError(err.Error())
 	}
 	return nil
 }
@@ -60,7 +57,11 @@ func (svc *Service) List() ([]models.Pen, error) {
 //get
 func (svc *Service) Get(id int) (models.Pen, error) {
 	pen, err := svc.repository.GetPen(id)
+
 	if err != nil {
+		return models.Pen{}, err
+	}
+	if err = pen.Exist(); err != nil {
 		return models.Pen{}, err
 	}
 	return pen, nil
@@ -71,17 +72,16 @@ func (svc *Service) Delete(id int) error {
 
 	pen, err := svc.repository.GetPen(id)
 	if err != nil {
-		return err
+		return models.NewInternalServerError(err.Error())
 	}
 
-	if pen.ID == 0 {
-		return errors.New("data not found")
+	if err = pen.Exist(); err != nil {
+		return err
 
 	}
 
-	err = svc.repository.Delete(pen.ID)
-	if err != nil {
-		return err
+	if err = svc.repository.Delete(pen.ID); err != nil {
+		return models.NewInternalServerError(err.Error())
 	}
 	return nil
 }
