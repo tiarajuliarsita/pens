@@ -6,9 +6,20 @@ import (
 	"github.com/tiarajuliarsita/pens/models"
 )
 
+type Repository struct {
+	db *sql.DB
+}
+
+func NewRepository(db *sql.DB) *Repository {
+	//validate
+	return &Repository{
+		db: db,
+	}
+}
+
 //create
-func CreatePens(db *sql.DB, pen models.Pen) (err error) {
-	_, err = db.Exec("insert into pens(name,price) values($1,$2)", pen.Name, pen.Price)
+func (r* Repository)CreatePens(pen models.Pen) (err error) {
+	_, err = r.db.Exec("insert into pens(name,price) values($1,$2)", pen.Name, pen.Price)
 	if err != nil {
 		return
 	}
@@ -16,8 +27,8 @@ func CreatePens(db *sql.DB, pen models.Pen) (err error) {
 }
 
 //get
-func GetPens(db *sql.DB) (pens []models.Pen, err error) {
-	rows, err := db.Query("select id, name, price from pens")
+func (r* Repository) GetPens() (pens []models.Pen, err error) {
+	rows, err :=r. db.Query("select id, name, price from pens")
 	if err != nil {
 		return nil, err
 	}
@@ -38,8 +49,8 @@ func GetPens(db *sql.DB) (pens []models.Pen, err error) {
 	return pens, nil
 }
 
-func GetPen(db *sql.DB, id string) (pen models.Pen, err error) {
-	rows, err := db.Query("select id, name, price from pens where id=$1", id)
+func  (r* Repository) GetPen(id int) (pen models.Pen, err error) {
+	rows, err := r.db.Query("select id, name, price from pens where id=$1", id)
 	if err != nil {
 		return models.Pen{}, err
 	}
@@ -60,8 +71,8 @@ func GetPen(db *sql.DB, id string) (pen models.Pen, err error) {
 }
 
 //delete
-func Delete(db *sql.DB, id string) (err error) {
-	_, err = db.Exec("DELETE FROM pens  WHERE id=$1", id)
+func  (r* Repository) Delete(id int) (err error) {
+	_, err = r.db.Exec("DELETE FROM pens  WHERE id=$1", id)
 	if err != nil {
 
 		return err
@@ -70,8 +81,8 @@ func Delete(db *sql.DB, id string) (err error) {
 }
 
 //update
-func UpdatePens(db *sql.DB, pen models.Pen) (err error) {
-	_, err = db.Exec("update pens set name = $2, price =$3 where id=$1", pen.ID, pen.Name, pen.Price)
+func  (r* Repository) UpdatePens(pen models.Pen) (err error) {
+	_, err = r. db.Exec("update pens set name = $2, price =$3 where id=$1", pen.ID, pen.Name, pen.Price)
 	if err != nil {
 		return
 	}
